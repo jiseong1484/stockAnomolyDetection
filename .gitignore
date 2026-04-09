@@ -1,0 +1,52 @@
+# --- IDEs & OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# --- Java & Gradle (api-server) ---
+api-server/.gradle/
+api-server/build/
+api-server/bin/
+api-server/out/
+api-server/.settings/
+api-server/.project
+api-server/.classpath
+api-server/*.iml
+api-server/*.ipr
+api-server/*.iws
+
+# --- Node.js & Next.js (web-app) ---
+web-app/node_modules/
+web-app/.next/
+web-app/out/
+web-app/build/
+web-app/.env*
+web-app/npm-debug.log*
+web-app/yarn-debug.log*
+web-app/yarn-error.log*
+web-app/.pnpm-debug.log*
+
+# --- Infra & Docker ---
+infra/mysql_data/
+infra/redis_data/
+infra/kafka_data/
+infra/influxdb_data/
+# docker-compose.yml 내의 볼륨 데이터 폴더가 있다면 해당 경로를 추가
+
+# --- Security & Secrets ---
+**/src/main/resources/application.yml
+*.key
+*.pem
+*.jks
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Logs ---
+logs/
+*.log
