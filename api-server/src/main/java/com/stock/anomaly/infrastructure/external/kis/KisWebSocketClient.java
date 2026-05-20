@@ -22,44 +22,16 @@ public class KisWebSocketClient extends TextWebSocketHandler {
     @Value("${kis.websocket.url}")
     private String wsUrl;
 
-    @Value("${kis.system.app-key}")
-    private String systemAppKey;
-
-    @Value("${kis.system.app-secret}")
-    private String systemAppSecret;
-
-    @Value("${kis.top-tickers}")
-    private String topTickersStr;
-
     private final StockTickPublisher stockTickPublisher;
     private final KisTokenManager kisTokenManager;
 
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
-    private Set<String> topTickers;
 
     public synchronized void subscribe(String appKey, String appSecret, List<String> tickers) {
-        if (topTickers == null) {
-            topTickers = new HashSet<>(Arrays.asList(topTickersStr.split(",")));
-        }
+        if (tickers == null || tickers.isEmpty()) return;
 
-        List<String> systemTickers = new ArrayList<>();
-        List<String> privateTickers = new ArrayList<>();
-
-        for (String ticker : tickers) {
-            if (topTickers.contains(ticker)) {
-                systemTickers.add(ticker);
-            } else {
-                privateTickers.add(ticker);
-            }
-        }
-
-        if (!systemTickers.isEmpty()) {
-            performSubscribe(systemAppKey, systemAppSecret, systemTickers);
-        }
-
-        if (!privateTickers.isEmpty()) {
-            performSubscribe(appKey, appSecret, privateTickers);
-        }
+        // 시스템 키 로직 제거 - 모든 구독은 인자로 받은 appKey/appSecret (사용자 키) 사용
+        performSubscribe(appKey, appSecret, tickers);
     }
 
     private void performSubscribe(String appKey, String appSecret, List<String> tickers) {
@@ -71,7 +43,6 @@ public class KisWebSocketClient extends TextWebSocketHandler {
             if (session == null || !session.isOpen()) {
                 StandardWebSocketClient client = new StandardWebSocketClient();
                 session = client.execute(this, wsUrl).get();
-                // 세션 속성에 appKey 저장하여 어떤 세션에서 온 데이터인지 식별 가능하게 함
                 session.getAttributes().put("appKey", appKey);
                 sessions.put(appKey, session);
                 log.info("Established KIS WS session for appKey: {}", appKey);
@@ -118,18 +89,14 @@ public class KisWebSocketClient extends TextWebSocketHandler {
             if (dataParts.length > 2) {
                 String ticker = dataParts[0];
                 String price = dataParts[2];
-                String volume = dataParts[7];
-
-                // appKey가 시스템 키이면 공용 데이터(ownerEmail=null), 아니면 개인 데이터로 표시
-                // 여기서는 간단히 appKey 자체를 owner 필드 대용으로 넘겨서 Consumer가 처리하게 함
-                String owner = systemAppKey.equals(appKey) ? null : appKey;
+                String volume = dataParts[13]; // 누적 체결량 (ACML_VOL)
 
                 StockTick tick = StockTick.builder()
                         .ticker(ticker)
                         .price(price)
                         .volume(volume)
                         .timestamp(System.currentTimeMillis())
-                        .ownerEmail(owner) // 임시로 appKey를 담아 보냄 (Consumer에서 User 조회용)
+                        .ownerEmail(appKey) // appKey를 통해 사용자 식별
                         .build();
 
                 stockTickPublisher.publish(tick);

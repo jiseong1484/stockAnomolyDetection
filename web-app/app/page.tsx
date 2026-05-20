@@ -27,21 +27,24 @@ export default function DashboardPage() {
 
   const fetchSubscriptions = async () => {
     const token = localStorage.getItem("accessToken")
+    console.log("[Dashboard] Fetching subscriptions with token:", token ? "Exists" : "Missing")
     try {
       const response = await fetch("http://localhost:8080/api/v1/subscriptions", {
         headers: { "Authorization": token || "" }
       })
       if (response.ok) {
         const data = await response.json()
-        setStocks(data.map((item: { ticker: string, name: string }) => ({
+        setStocks(data.map((item: { ticker: string, name: string, price: string }) => ({
           id: item.ticker,
           ticker: item.ticker,
           name: item.name,
-          price: "0",
+          price: item.price && item.price !== "0" ? item.price : "0",
           change: "0.00%",
           changeAmount: "0",
           status: "stable"
         })))
+      } else {
+        console.error("[Dashboard] Subscriptions fetch failed:", response.status)
       }
     } catch (error) {
       console.error("Failed to fetch subscriptions:", error)
@@ -57,8 +60,11 @@ export default function DashboardPage() {
     setLoading(false)
     fetchSubscriptions()
 
-    // SSE 연결
-    const eventSource = new EventSource(`http://localhost:8080/api/v1/sse/subscribe?token=${token.split(' ')[1]}`)
+    // SSE 연결 (Bearer 제외한 순수 토큰만 추출)
+    const rawToken = token.startsWith("Bearer ") ? token.split(' ')[1] : token
+    console.log("[Dashboard] Connecting SSE with token length:", rawToken.length)
+    
+    const eventSource = new EventSource(`http://localhost:8080/api/v1/sse/subscribe?token=${rawToken}`)
 
     eventSource.addEventListener("stock-tick", (event) => {
       const newTick = JSON.parse(event.data)
@@ -68,6 +74,12 @@ export default function DashboardPage() {
             ? { ...stock, price: newTick.price }
             : stock
         )
+      )
+      // 현재 선택된 종목인 경우 selectedStock도 업데이트
+      setSelectedStock((prev) => 
+        prev?.ticker === newTick.ticker 
+          ? { ...prev, price: newTick.price }
+          : prev
       )
     })
 

@@ -3,12 +3,14 @@ package com.stock.anomaly.infrastructure.kafka.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stock.anomaly.application.sse.SseService;
 import com.stock.anomaly.application.subscription.SubscriptionService;
+import com.stock.anomaly.domain.stock.StockRepository;
 import com.stock.anomaly.domain.stock.StockTick;
 import com.stock.anomaly.infrastructure.persistence.influxdb.InfluxDbRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 
@@ -20,9 +22,11 @@ public class KafkaStockTickConsumer {
     private final SseService sseService;
     private final InfluxDbRepository influxDbRepository;
     private final SubscriptionService subscriptionService;
+    private final StockRepository stockRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @KafkaListener(topics = "raw-stock-prices", groupId = "sse-push-group")
+    @Transactional
     public void consume(String message) {
         try {
             StockTick tick = objectMapper.readValue(message, StockTick.class);
@@ -31,9 +35,14 @@ public class KafkaStockTickConsumer {
             // InfluxDB 저장
             influxDbRepository.save(tick);
 
+            // MySQL Stock 테이블 최신가 업데이트
+            stockRepository.findById(tick.getTicker()).ifPresent(stock -> {
+                stock.updatePrice(tick.getPrice(), tick.getVolume());
+            });
+
             // 지능형 SSE 브로드캐스트
             if (tick.getOwnerEmail() == null) {
-                // 공용 종목 (Top 20) -> 모든 접속 유저에게 방송
+                // 공용 종목 -> 모든 접속 유저에게 방송
                 sseService.broadcast(tick);
             } else {
                 // 개인 종목 -> 해당 API Key를 사용하는 유저들에게만 발송

@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class SubscriptionResponse {
     private String ticker;
     private String name;
+    private String price;
+    private String volume;
 }
