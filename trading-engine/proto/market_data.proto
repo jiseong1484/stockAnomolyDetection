@@ -1,0 +1,42 @@
+syntax = "proto3";
+package trading;
+
+// Raw tick published to raw-market-data topic.
+message TickMessage {
+    string ticker       = 1;
+    double price        = 2;
+    double volume       = 3;
+    int64  timestamp_ms = 4;
+}
+
+// Aggregated candle published by C++ engine for AI inference.
+message CandleMessage {
+    string ticker         = 1;
+    double open           = 2;
+    double high           = 3;
+    double low            = 4;
+    double close          = 5;
+    double volume         = 6;
+    int64  open_time_ms   = 7;
+    int64  close_time_ms  = 8;
+    int32  window_minutes = 9;
+    int32  tick_count     = 10;
+}
+
+// Anomaly signal published by C++ engine to urgent-signals topic.
+message ScalpingSignalMessage {
+    string ticker            = 1;
+    double zscore            = 2;
+    double price_change_pct  = 3;
+    int64  timestamp_ms      = 4;
+}
+
+// AI inference result published to ai-signals topic.
+message AISignalMessage {
+    string ticker            = 1;
+    double bull_probability  = 2;
+    double bear_probability  = 3;
+    string direction         = 4;  // "BUY_READY" | "SELL_READY" | "NEUTRAL"
+    int64  timestamp_ms      = 5;
+    int64  candle_close_time = 6;
+}
