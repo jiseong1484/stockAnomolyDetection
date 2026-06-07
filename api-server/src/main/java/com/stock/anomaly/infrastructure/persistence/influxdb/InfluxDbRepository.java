@@ -16,8 +16,6 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Repository
@@ -46,16 +44,18 @@ public class InfluxDbRepository {
         }
     }
 
-    public void saveOhlcv(String ticker, OhlcvResponse ohlcv) {
+    // interval 태그를 추가해 일봉/주봉/월봉 데이터를 시리즈 단위로 구분
+    public void saveOhlcv(String ticker, String interval, OhlcvResponse ohlcv) {
         try {
             WriteApiBlocking writeApi = influxDBClient.getWriteApiBlocking();
             Point point = Point.measurement("stock_prices")
                     .addTag("ticker", ticker)
+                    .addTag("interval", interval)
                     .addField("open", ohlcv.getOpen())
                     .addField("high", ohlcv.getHigh())
                     .addField("low", ohlcv.getLow())
                     .addField("close", ohlcv.getClose())
-                    .addField("price", ohlcv.getClose()) // 실시간 틱과 호환성 위해 close를 price로도 저장
+                    .addField("price", ohlcv.getClose())
                     .addField("volume", ohlcv.getVolume())
                     .time(Instant.ofEpochSecond(ohlcv.getTime()), WritePrecision.S);
             writeApi.writePoint(bucket, influxOrg, point);
@@ -64,8 +64,8 @@ public class InfluxDbRepository {
         }
     }
 
-    public void saveOhlcvList(String ticker, List<OhlcvResponse> list) {
-        list.forEach(item -> saveOhlcv(ticker, item));
+    public void saveOhlcvList(String ticker, String interval, List<OhlcvResponse> list) {
+        list.forEach(item -> saveOhlcv(ticker, interval, item));
     }
 
     private List<OhlcvResponse> executeOhlcvQuery(String query, String ticker) {
@@ -74,12 +74,12 @@ public class InfluxDbRepository {
             List<FluxTable> tables = influxDBClient.getQueryApi().query(query, influxOrg);
             for (FluxTable table : tables) {
                 for (FluxRecord record : table.getRecords()) {
-                    // 필드가 이미 존재하면(캐시된 데이터) 해당 값을 사용, 없으면 집계된 값을 사용
                     Double open = getDoubleValue(record, "open", "price");
                     Double high = getDoubleValue(record, "high", "price");
                     Double low = getDoubleValue(record, "low", "price");
                     Double close = getDoubleValue(record, "close", "price");
-                    Long volume = record.getValueByKey("volume") != null ? ((Number) record.getValueByKey("volume")).longValue() : 0L;
+                    Long volume = record.getValueByKey("volume") != null
+                            ? ((Number) record.getValueByKey("volume")).longValue() : 0L;
 
                     result.add(OhlcvResponse.builder()
                             .time(record.getTime().getEpochSecond())
@@ -113,34 +113,45 @@ public class InfluxDbRepository {
         return executeOhlcvQuery(query, ticker);
     }
 
+    // InfluxDB Flux duration literals: 1m(분), 1h, 1d, 1w, 1mo(월)
+    // 프론트에서 쓰는 "1M"은 Flux에서 유효하지 않으므로 "1mo"로 변환
+    private String toFluxInterval(String interval) {
+        if ("1M".equals(interval)) return "1mo";
+        return interval;
+    }
+
     private String buildOhlcvQuery(String ticker, String interval, String start, String stop) {
-        // 이미 OHLC 필드가 있는 경우(캐시)와 없는 경우(실시간 틱)를 구분하여 처리
-        // 'open' 필드가 있는 포인트는 이미 집계된 과거 데이터임
+        String fluxInterval = toFluxInterval(interval);
         return String.format(
-                "data = from(bucket: \"%s\") " +
-                "|> range(start: %s, stop: %s) " +
-                "|> filter(fn: (r) => r[\"_measurement\"] == \"stock_prices\") " +
-                "|> filter(fn: (r) => r[\"ticker\"] == \"%s\")\n" +
-                "\n" +
-                "// 1. 이미 OHLC로 저장된 데이터 (캐시)\n" +
-                "cached = data |> filter(fn: (r) => r[\"_field\"] == \"open\" or r[\"_field\"] == \"high\" or r[\"_field\"] == \"low\" or r[\"_field\"] == \"close\" or r[\"_field\"] == \"volume\")\n" +
-                "\n" +
-                "// 2. 실시간 틱 데이터 (price 필드만 있고 open은 없는 데이터만 선택)\n" +
-                "ticks = data \n" +
+                "data = from(bucket: \"%s\")\n" +
+                "  |> range(start: %s, stop: %s)\n" +
+                "  |> filter(fn: (r) => r[\"_measurement\"] == \"stock_prices\")\n" +
+                "  |> filter(fn: (r) => r[\"ticker\"] == \"%s\")\n\n" +
+
+                // 캐시된 OHLCV: interval 태그 있음, _field/_value 포맷 유지
+                "cached = data\n" +
+                "  |> filter(fn: (r) => exists r[\"interval\"] and r[\"interval\"] == \"%s\")\n" +
+                "  |> filter(fn: (r) => r[\"_field\"] == \"open\" or r[\"_field\"] == \"high\" or r[\"_field\"] == \"low\" or r[\"_field\"] == \"close\" or r[\"_field\"] == \"volume\")\n\n" +
+
+                // 실시간 틱: interval 태그 없음. pivot 전에 분리해야 _value 컬럼이 존재
+                "price_ticks = data\n" +
+                "  |> filter(fn: (r) => not exists r[\"interval\"] and r[\"_field\"] == \"price\")\n\n" +
+                "vol_ticks = data\n" +
+                "  |> filter(fn: (r) => not exists r[\"interval\"] and r[\"_field\"] == \"volume\")\n\n" +
+
+                // aggregateWindow는 _value 컬럼에 동작 — pivot 전이므로 정상 동작
+                "agg_open  = price_ticks |> aggregateWindow(every: %s, fn: first, createEmpty: false) |> set(key: \"_field\", value: \"open\")\n" +
+                "agg_high  = price_ticks |> aggregateWindow(every: %s, fn: max,   createEmpty: false) |> set(key: \"_field\", value: \"high\")\n" +
+                "agg_low   = price_ticks |> aggregateWindow(every: %s, fn: min,   createEmpty: false) |> set(key: \"_field\", value: \"low\")\n" +
+                "agg_close = price_ticks |> aggregateWindow(every: %s, fn: last,  createEmpty: false) |> set(key: \"_field\", value: \"close\")\n" +
+                "agg_vol   = vol_ticks   |> aggregateWindow(every: %s, fn: sum,   createEmpty: false) |> set(key: \"_field\", value: \"volume\")\n\n" +
+
+                "union(tables: [cached, agg_open, agg_high, agg_low, agg_close, agg_vol])\n" +
                 "  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n" +
-                "  |> filter(fn: (r) => exists r.price and not exists r.open)\n" +
-                "\n" +
-                "// 틱 데이터를 OHLC로 집계\n" +
-                "agg_open = ticks |> aggregateWindow(every: %s, fn: (column, tables=<-) => tables |> first(), column: \"price\", createEmpty: false) |> set(key: \"_field\", value: \"open\")\n" +
-                "agg_high = ticks |> aggregateWindow(every: %s, fn: (column, tables=<-) => tables |> max(), column: \"price\", createEmpty: false) |> set(key: \"_field\", value: \"high\")\n" +
-                "agg_low = ticks |> aggregateWindow(every: %s, fn: (column, tables=<-) => tables |> min(), column: \"price\", createEmpty: false) |> set(key: \"_field\", value: \"low\")\n" +
-                "agg_close = ticks |> aggregateWindow(every: %s, fn: (column, tables=<-) => tables |> last(), column: \"price\", createEmpty: false) |> set(key: \"_field\", value: \"close\")\n" +
-                "agg_vol = ticks |> aggregateWindow(every: %s, fn: (column, tables=<-) => tables |> sum(), column: \"volume\", createEmpty: false) |> set(key: \"_field\", value: \"volume\")\n" +
-                "\n" +
-                "union(tables: [cached, agg_open, agg_high, agg_low, agg_close, agg_vol]) " +
-                "|> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\") " +
-                "|> sort(columns: [\"_time\"])",
-                bucket, start, stop, ticker, interval, interval, interval, interval, interval
+                "  |> sort(columns: [\"_time\"])",
+                bucket, start, stop, ticker,
+                interval,
+                fluxInterval, fluxInterval, fluxInterval, fluxInterval, fluxInterval
         );
     }
 

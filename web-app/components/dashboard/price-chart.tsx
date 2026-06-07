@@ -36,11 +36,20 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     ohlcvDataRef.current = ohlcvData
   }, [ohlcvData])
 
-  const [interval, setInterval] = useState<"1d" | "1m" | "1w" | "1M">("1d")
+  const [interval, setChartInterval] = useState<"1d" | "1m" | "1w" | "1M">("1d")
+  const intervalRef = useRef(interval)
+  useEffect(() => {
+    intervalRef.current = interval
+  }, [interval])
   const [legendData, setLegendData] = useState<{ open: number; high: number; low: number; close: number } | null>(null)
   
   const tickBuffer = useRef<{ price: number; timestamp: number }[]>([])
   const isFetchingRef = useRef(false)
+  const noMoreDataRef = useRef(false)  // 더 이상 과거 데이터가 없을 때 무한 요청 방지
+  const isHistoryLoadedRef = useRef(false)
+  useEffect(() => {
+    isHistoryLoadedRef.current = isHistoryLoaded
+  }, [isHistoryLoaded])
 
   // KST(한국 표준시) 날짜 문자열 생성 헬퍼 (YYYY-MM-DD)
   const getKstDateString = (timestamp: number) => {
@@ -59,7 +68,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     const sortedData = [...data].sort((a, b) => a.time - b.time);
 
     sortedData.forEach(d => {
-      const isDaily = (interval === "1d" || interval === "1w" || interval === "1M");
+      const isDaily = (intervalRef.current === "1d" || intervalRef.current === "1w" || intervalRef.current === "1M");
       const timeKey = isDaily ? getKstDateString(d.time) : d.time;
       
       dataMap.set(timeKey, {
@@ -155,29 +164,33 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
       }
     });
 
+    noMoreDataRef.current = false  // 종목/interval 전환 시 리셋
+
     // 무한 스크롤 및 축소 감지 (동적 임계값 적용)
     chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (!range) return;
-      
+      if (isFetchingRef.current || noMoreDataRef.current) return;
+
       const currentData = ohlcvDataRef.current;
       const barsCount = currentData.length;
+      if (barsCount === 0) return;
+
       const visibleBars = range.to - range.from;
-      
+
       // 화면에 보이는 양의 50% 지점에 도달하면 로딩 (최소 50개)
       const threshold = Math.max(visibleBars * 0.5, 50);
-      
-      console.log(`[PriceChart] View: from=${range.from.toFixed(1)}, visible=${visibleBars.toFixed(1)}, threshold=${threshold.toFixed(1)}, total=${barsCount}`);
 
-      if (range.from < threshold && !isFetchingRef.current) {
-        if (barsCount > 0) {
-          console.log(`[PriceChart] Dynamic Trigger Met: from(${range.from.toFixed(1)}) < threshold(${threshold.toFixed(1)})`);
-          loadMore();
-        }
+      if (range.from < threshold) {
+        console.log(`[PriceChart] Dynamic Trigger Met: from(${range.from.toFixed(1)}) < threshold(${threshold.toFixed(1)})`);
+        loadMore();
       }
     });
 
     return () => {
       window.removeEventListener("resize", handleResize)
+      // interval 전환 시 이전 interval 데이터가 loadMore에 오염되지 않도록 ref를 즉시 초기화
+      ohlcvDataRef.current = []
+      noMoreDataRef.current = false
       setIsChartReady(false)
       chart.remove()
     }
@@ -185,8 +198,9 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
 
   const loadMore = async () => {
     const currentData = ohlcvDataRef.current;
-    if (isFetchingRef.current || currentData.length === 0) {
-      console.log(`[PriceChart] loadMore skipped: isFetching=${isFetchingRef.current}, dataLength=${currentData.length}`);
+    // isHistoryLoaded가 false면 아직 초기 데이터 로드 중이므로 스킵 (interval 전환 race condition 방지)
+    if (isFetchingRef.current || currentData.length === 0 || !isHistoryLoadedRef.current) {
+      console.log(`[PriceChart] loadMore skipped: isFetching=${isFetchingRef.current}, dataLength=${currentData.length}, historyLoaded=${isHistoryLoadedRef.current}`);
       return;
     }
     
@@ -197,14 +211,17 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     
     let endDateStr = "";
     if (interval === "1m") {
-      // 분봉의 경우 HHmmss까지 포함
-      date.setUTCMinutes(date.getUTCMinutes() - 1);
-      endDateStr = date.getUTCFullYear() + 
-                  String(date.getUTCMonth() + 1).padStart(2, '0') + 
-                  String(date.getUTCDate()).padStart(2, '0') +
-                  String(date.getUTCHours()).padStart(2, '0') +
-                  String(date.getUTCMinutes()).padStart(2, '0') +
-                  String(date.getUTCSeconds()).padStart(2, '0');
+      // 분봉: 가장 오래된 데이터의 1분 전 KST 시간으로 endDate 계산
+      // epoch second 에서 직접 60초를 빼서 계산 (Date 객체 조작 실수 방지)
+      const prevMinuteEpochSec = earliestPoint.time - 60;
+      const prevMs = prevMinuteEpochSec * 1000;
+      const kst = new Date(prevMs + (9 * 60 * 60 * 1000)); // UTC+9 오프셋 더해 KST 시간 추출
+      endDateStr = kst.getUTCFullYear() +
+                  String(kst.getUTCMonth() + 1).padStart(2, '0') +
+                  String(kst.getUTCDate()).padStart(2, '0') +
+                  String(kst.getUTCHours()).padStart(2, '0') +
+                  String(kst.getUTCMinutes()).padStart(2, '0') +
+                  String(kst.getUTCSeconds()).padStart(2, '0');
     } else {
       date.setUTCDate(date.getUTCDate() - 1);
       endDateStr = date.getUTCFullYear() + 
@@ -233,12 +250,19 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
           const uniqueSorted = Array.from(
             new Map(combined.map(item => [item.time, item])).values()
           ).sort((a, b) => a.time - b.time);
-          
-          console.log(`[PriceChart] Prepending data. New total bars: ${uniqueSorted.length}`);
-          setOhlcvData(uniqueSorted);
-          updateChartData(uniqueSorted);
+
+          // 실제로 새 데이터가 추가됐는지 확인 (중복 제거 후 개수 비교)
+          if (uniqueSorted.length > currentData.length) {
+            console.log(`[PriceChart] Prepending data. New total bars: ${uniqueSorted.length}`);
+            setOhlcvData(uniqueSorted);
+            updateChartData(uniqueSorted);
+          } else {
+            console.log("[PriceChart] Received data was all duplicates. Marking no more data.");
+            noMoreDataRef.current = true;
+          }
         } else {
-          console.log("[PriceChart] No more data available from server.");
+          console.log("[PriceChart] No more data available from server. Stopping loadMore.");
+          noMoreDataRef.current = true;
         }
       } else {
         console.error(`[PriceChart] Fetch failed with status: ${response.status}`);
@@ -323,14 +347,14 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
   }, [selectedStock?.price, isHistoryLoaded])
 
   const applyTick = (price: number, timestamp: number) => {
-    if (!candleSeries.current || !ohlcvData.length) return
+    if (!candleSeries.current || !ohlcvDataRef.current.length) return
 
-    const isDaily = (interval === "1d" || interval === "1w" || interval === "1M");
+    const isDaily = (intervalRef.current === "1d" || intervalRef.current === "1w" || intervalRef.current === "1M");
     const timeKey = isDaily ? getKstDateString(timestamp) : Math.floor(timestamp / 1000 / 60) * 60;
 
     setOhlcvData(prev => {
       const lastPoint = prev.length > 0 ? prev[prev.length - 1] : null;
-      
+
       // lightweight-charts는 과거 시점의 데이터를 update할 수 없음
       // 마지막 데이터의 시간보다 작으면 업데이트 무시 (Cannot update oldest data 에러 방지)
       const lastTimeKey = lastPoint ? (isDaily ? getKstDateString(lastPoint.time) : Math.floor(lastPoint.time / 60) * 60) : null;
@@ -349,28 +373,36 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
         updatedPoint = {
           ...lastPoint,
           high: Math.max(lastPoint.high, price),
-          low: Math.min(lastPoint.low, price),
+          low:  Math.min(lastPoint.low,  price),
           close: price,
         };
         newHistory[newHistory.length - 1] = updatedPoint;
       } else {
+        // 새 캔들: non-daily는 분 단위 정렬된 시간을 저장해 다음 비교와 일치시킴
         updatedPoint = {
-          time: Math.floor(timestamp / 1000),
-          open: price,
-          high: price,
-          low: price,
-          close: price,
+          time: isDaily ? Math.floor(timestamp / 1000) : (timeKey as number),
+          open:   price,
+          high:   price,
+          low:    price,
+          close:  price,
           volume: 0,
         };
         newHistory.push(updatedPoint);
       }
 
+      // 차트 update에는 반드시 차트에 이미 저장된 시간 키를 써야 함.
+      // isSameTime 일 때 timeKey 대신 lastPoint.time(daily는 날짜 문자열)을 써서
+      // "Cannot update oldest data" 오류를 방지한다.
+      const chartTime = isSameTime && lastPoint
+        ? (isDaily ? lastTimeKey : lastPoint.time)
+        : timeKey;
+
       try {
         candleSeries.current?.update({
-          time: timeKey as any,
-          open: updatedPoint.open,
-          high: updatedPoint.high,
-          low: updatedPoint.low,
+          time:  chartTime as any,
+          open:  updatedPoint.open,
+          high:  updatedPoint.high,
+          low:   updatedPoint.low,
           close: updatedPoint.close,
         });
       } catch (e) {
@@ -425,7 +457,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
         <div className="flex flex-col items-end gap-3">
           <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1">
             <button
-              onClick={() => setInterval("1m")}
+              onClick={() => setChartInterval("1m")}
               className={cn(
                 "rounded px-3 py-1 text-xs font-medium transition-colors",
                 interval === "1m" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -434,7 +466,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
               1분
             </button>
             <button
-              onClick={() => setInterval("1d")}
+              onClick={() => setChartInterval("1d")}
               className={cn(
                 "rounded px-3 py-1 text-xs font-medium transition-colors",
                 interval === "1d" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -443,7 +475,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
               1일
             </button>
             <button
-              onClick={() => setInterval("1w")}
+              onClick={() => setChartInterval("1w")}
               className={cn(
                 "rounded px-3 py-1 text-xs font-medium transition-colors",
                 interval === "1w" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -452,7 +484,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
               1주
             </button>
             <button
-              onClick={() => setInterval("1M")}
+              onClick={() => setChartInterval("1M")}
               className={cn(
                 "rounded px-3 py-1 text-xs font-medium transition-colors",
                 interval === "1M" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
