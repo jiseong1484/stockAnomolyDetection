@@ -25,7 +25,7 @@ public class KafkaStockTickConsumer {
     private final StockRepository stockRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @KafkaListener(topics = "raw-stock-prices", groupId = "sse-push-group")
+    @KafkaListener(topics = "raw-market-data", groupId = "sse-push-group")
     @Transactional
     public void consume(String message) {
         try {

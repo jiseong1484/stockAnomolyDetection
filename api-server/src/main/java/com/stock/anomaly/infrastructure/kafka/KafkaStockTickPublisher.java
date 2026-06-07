@@ -15,7 +15,7 @@ public class KafkaStockTickPublisher implements StockTickPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final String TOPIC = "raw-stock-prices";
+    private static final String TOPIC = "raw-market-data";
 
     @Override
     public void publish(StockTick tick) {
