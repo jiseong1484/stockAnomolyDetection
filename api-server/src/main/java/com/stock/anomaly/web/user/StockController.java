@@ -21,6 +21,13 @@ public class StockController {
     private final InfluxDbRepository influxDbRepository;
     private final StockService stockService;
 
+    @GetMapping("/search")
+    public List<com.stock.anomaly.domain.stock.Stock> searchStocks(
+            @RequestParam String query,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        return stockService.searchStocks(query, userDetails.getUser());
+    }
+
     @GetMapping("/{ticker}/ohlcv")
     public List<OhlcvResponse> getOhlcv(
             @PathVariable String ticker,

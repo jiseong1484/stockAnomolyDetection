@@ -43,6 +43,7 @@ dependencies {
     // Utils
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+    implementation 'org.jsoup:jsoup:1.17.2'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'com.influxdb:influxdb-client-java:6.12.0'
 
