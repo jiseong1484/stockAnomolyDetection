@@ -55,4 +55,15 @@ public class SseService {
             }
         }
     }
+
+    public void broadcastAnomaly(Object data) {
+        emitters.forEach((email, emitter) -> {
+            try {
+                emitter.send(SseEmitter.event().name("anomaly-alert").data(data));
+            } catch (IOException e) {
+                log.error("Failed to broadcast anomaly to {}: {}", email, e.getMessage());
+                emitters.remove(email);
+            }
+        });
+    }
 }
