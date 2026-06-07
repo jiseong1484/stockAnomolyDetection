@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { StockList, type Stock } from "@/components/dashboard/stock-list"
 import { PriceChart } from "@/components/dashboard/price-chart"
-import { AlarmLog } from "@/components/dashboard/alarm-log"
+import { AlarmLog, type AlarmEntry } from "@/components/dashboard/alarm-log"
 import { SystemMetrics } from "@/components/dashboard/system-metrics"
 import { cn } from "@/lib/utils"
 
@@ -23,7 +23,10 @@ export default function DashboardPage() {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [loading, setLoading] = useState(true)
   const [stocks, setStocks] = useState<Stock[]>([])
+  const [alarms, setAlarms] = useState<AlarmEntry[]>([])
   const [newTicker, setNewTicker] = useState("")
+  const [searchResults, setSearchResults] = useState<Stock[]>([])
+  const [showSearchResults, setShowSearchResults] = useState(false)
 
   const fetchSubscriptions = async () => {
     const token = localStorage.getItem("accessToken")
@@ -34,7 +37,7 @@ export default function DashboardPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        setStocks(data.map((item: { ticker: string, name: string, price: string }) => ({
+        setStocks(data.map((item: any) => ({
           id: item.ticker,
           ticker: item.ticker,
           name: item.name,
@@ -50,6 +53,41 @@ export default function DashboardPage() {
       console.error("Failed to fetch subscriptions:", error)
     }
   }
+
+  useEffect(() => {
+    const searchStocks = async () => {
+      if (newTicker.length < 2) {
+        setSearchResults([])
+        setShowSearchResults(false)
+        return
+      }
+
+      try {
+        const token = localStorage.getItem("accessToken")
+        const response = await fetch(`http://localhost:8080/api/v1/stocks/search?query=${newTicker}`, {
+          headers: { "Authorization": token || "" }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setSearchResults(data.map((item: any) => ({
+            id: item.ticker,
+            ticker: item.ticker,
+            name: item.name,
+            price: item.currentPrice || "0",
+            change: "0.00%",
+            changeAmount: "0",
+            status: "stable"
+          })))
+          setShowSearchResults(true)
+        }
+      } catch (error) {
+        console.error("Failed to search stocks:", error)
+      }
+    }
+
+    const timer = setTimeout(searchStocks, 300)
+    return () => clearTimeout(timer)
+  }, [newTicker])
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken")
@@ -68,19 +106,33 @@ export default function DashboardPage() {
 
     eventSource.addEventListener("stock-tick", (event) => {
       const newTick = JSON.parse(event.data)
-      setStocks((prevStocks) => 
-        prevStocks.map(stock => 
-          stock.ticker === newTick.ticker 
-            ? { ...stock, price: newTick.price }
+      setStocks((prevStocks) =>
+        prevStocks.map(stock =>
+          stock.ticker === newTick.ticker
+            ? { ...stock, price: String(newTick.price) }
             : stock
         )
       )
-      // 현재 선택된 종목인 경우 selectedStock도 업데이트
-      setSelectedStock((prev) => 
-        prev?.ticker === newTick.ticker 
-          ? { ...prev, price: newTick.price }
-          : prev
-      )
+      setSelectedStock((prev) => {
+        if (prev && prev.ticker === newTick.ticker) {
+          return { ...prev, price: String(newTick.price) }
+        }
+        return prev
+      })
+    })
+
+    eventSource.addEventListener("anomaly-alert", (event) => {
+      const raw = JSON.parse(event.data)
+      const newAlarm: AlarmEntry = {
+        id: `${raw.ticker}-${raw.timestamp_ms}`,
+        timestamp: new Date(raw.timestamp_ms),
+        ticker: raw.ticker,
+        zscore: raw.zscore,
+        price_change_pct: raw.price_change_pct,
+        current_price: raw.current_price,
+        severity: raw.severity,
+      }
+      setAlarms((prev) => [newAlarm, ...prev.slice(0, 49)])
     })
 
     return () => {
@@ -88,8 +140,9 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  const handleSubscribe = async () => {
-    if (!newTicker) return
+  const handleSubscribe = async (tickerToAdd?: string) => {
+    const targetTicker = tickerToAdd || newTicker
+    if (!targetTicker) return
     const token = localStorage.getItem("accessToken")
     try {
       const response = await fetch("http://localhost:8080/api/v1/subscriptions", {
@@ -98,10 +151,11 @@ export default function DashboardPage() {
           "Authorization": token || "",
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ ticker: newTicker })
+        body: JSON.stringify({ ticker: targetTicker })
       })
       if (response.ok) {
         setNewTicker("")
+        setShowSearchResults(false)
         fetchSubscriptions()
       }
     } catch (error) {
@@ -111,6 +165,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken")
+    document.cookie = "authenticated=; path=/; max-age=0"
     router.replace("/auth/login")
   }
 
@@ -150,14 +205,27 @@ export default function DashboardPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="종목 코드 입력 (예: 005930)"
+                placeholder="종목명 또는 코드 검색"
                 value={newTicker}
                 onChange={(e) => setNewTicker(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
+                onFocus={() => newTicker.length >= 2 && setShowSearchResults(true)}
                 className="h-9 w-64 rounded-lg border border-border bg-secondary/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
+              {showSearchResults && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-md border border-border bg-popover p-1 shadow-md max-h-64 overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.ticker}
+                      className="flex w-full flex-col items-start rounded-sm px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => handleSubscribe(result.ticker)}
+                    >
+                      <span className="font-medium">{result.name}</span>
+                      <span className="text-xs text-muted-foreground">{result.ticker}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button size="sm" onClick={handleSubscribe}>추가</Button>
           </div>
 
           <div className="hidden items-center gap-2 rounded-lg bg-chart-1/10 px-3 py-1.5 sm:flex">
@@ -221,7 +289,7 @@ export default function DashboardPage() {
 
           {/* Right Column: Logs */}
           <div className="col-span-12 lg:col-span-3 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <AlarmLog />
+            <AlarmLog alarms={alarms} />
           </div>
         </div>
       </main>

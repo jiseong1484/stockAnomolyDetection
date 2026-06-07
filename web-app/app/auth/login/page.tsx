@@ -29,8 +29,8 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json()
-        // 토큰 저장 (Bearer 포함)
         localStorage.setItem("accessToken", `${data.tokenType} ${data.accessToken}`)
+        document.cookie = "authenticated=true; path=/; SameSite=Lax"
         router.push("/")
       } else {
         const errorMsg = await response.text()
