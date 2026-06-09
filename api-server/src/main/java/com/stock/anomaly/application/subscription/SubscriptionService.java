@@ -10,6 +10,7 @@ import com.stock.anomaly.domain.user.User;
 import com.stock.anomaly.infrastructure.external.kis.KisTokenManager;
 import com.stock.anomaly.infrastructure.external.kis.KisWebSocketClient;
 import com.stock.anomaly.infrastructure.persistence.redis.StockPriceRedisRepository;
+import com.stock.anomaly.infrastructure.persistence.redis.SubscriptionCacheRedisRepository;
 import com.stock.anomaly.web.subscription.dto.SubscriptionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,7 @@ public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final StockPriceRedisRepository stockPriceRedisRepository;
+    private final SubscriptionCacheRedisRepository subscriptionCacheRedisRepository;
     private final StockRepository stockRepository;
     private final KisWebSocketClient kisWebSocketClient;
     private final KisTokenManager kisTokenManager;
@@ -99,6 +101,7 @@ public class SubscriptionService {
             return;
         }
 
+        subscriptionCacheRedisRepository.evict(user.getId());
         registerAppKey(user.getKisApiKey(), user.getEmail());
         
         // 1. 초기 가격 정보 가져오기 (REST API)
@@ -159,27 +162,31 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public List<SubscriptionResponse> getSubscriptions(User user) {
-        List<Subscription> subscriptions = subscriptionRepository.findAllByUser(user);
-        
-        return subscriptions.stream()
-                .map(sub -> {
-                    String ticker = sub.getTicker();
-                    String name = stockRepository.findById(ticker)
-                            .map(Stock::getName).orElse("주식 " + ticker);
-                    String price = stockPriceRedisRepository.getPrice(ticker);
-                    String volume = stockPriceRedisRepository.getVolume(ticker);
+        List<String> tickers = subscriptionCacheRedisRepository.find(user.getId())
+                .orElseGet(() -> {
+                    List<String> fromDb = subscriptionRepository.findAllByUser(user).stream()
+                            .map(Subscription::getTicker)
+                            .collect(Collectors.toList());
+                    subscriptionCacheRedisRepository.save(user.getId(), fromDb);
+                    log.debug("[SubscriptionCache] Cache miss for userId={}, loaded {} tickers from DB", user.getId(), fromDb.size());
+                    return fromDb;
+                });
 
-                    return SubscriptionResponse.builder()
-                            .ticker(ticker)
-                            .name(name)
-                            .price(price)
-                            .volume(volume)
-                            .build();
-                })
+        Map<String, String> nameByTicker = stockRepository.findAllById(tickers).stream()
+                .collect(Collectors.toMap(Stock::getTicker, Stock::getName));
+
+        return tickers.stream()
+                .map(ticker -> SubscriptionResponse.builder()
+                        .ticker(ticker)
+                        .name(nameByTicker.getOrDefault(ticker, "주식 " + ticker))
+                        .price(stockPriceRedisRepository.getPrice(ticker))
+                        .volume(stockPriceRedisRepository.getVolume(ticker))
+                        .build())
                 .collect(Collectors.toList());
     }
 
     public void unsubscribe(User user, String ticker) {
         subscriptionRepository.deleteByUserAndTicker(user, ticker);
+        subscriptionCacheRedisRepository.evict(user.getId());
     }
 }
