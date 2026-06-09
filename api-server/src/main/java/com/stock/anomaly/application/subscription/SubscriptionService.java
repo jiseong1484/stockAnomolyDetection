@@ -9,9 +9,11 @@ import com.stock.anomaly.domain.subscription.SubscriptionRepository;
 import com.stock.anomaly.domain.user.User;
 import com.stock.anomaly.infrastructure.external.kis.KisTokenManager;
 import com.stock.anomaly.infrastructure.external.kis.KisWebSocketClient;
+import com.stock.anomaly.infrastructure.persistence.redis.StockPriceRedisRepository;
 import com.stock.anomaly.web.subscription.dto.SubscriptionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -37,6 +39,7 @@ public class SubscriptionService {
     private String apiUrl;
 
     private final SubscriptionRepository subscriptionRepository;
+    private final StockPriceRedisRepository stockPriceRedisRepository;
     private final StockRepository stockRepository;
     private final KisWebSocketClient kisWebSocketClient;
     private final KisTokenManager kisTokenManager;
@@ -89,7 +92,12 @@ public class SubscriptionService {
                 .user(user)
                 .ticker(ticker)
                 .build();
-        subscriptionRepository.save(subscription);
+        try {
+            subscriptionRepository.save(subscription);
+        } catch (DataIntegrityViolationException e) {
+            log.info("Ticker {} already subscribed for user {} (concurrent request)", ticker, user.getEmail());
+            return;
+        }
 
         registerAppKey(user.getKisApiKey(), user.getEmail());
         
@@ -120,12 +128,9 @@ public class SubscriptionService {
                 String acmlVol = (String) output.get("acml_vol");
                 
                 log.info("Fetched initial price for {}: {}", ticker, currentPrice);
-                
-                // Stock 테이블의 현재가 정보 업데이트
-                stockRepository.findById(ticker).ifPresent(stock -> {
-                    stock.updatePrice(currentPrice, acmlVol);
-                    stockRepository.save(stock);
-                });
+
+                // Redis에 현재가 저장 (MySQL 대신)
+                stockPriceRedisRepository.save(ticker, currentPrice, acmlVol);
 
                 StockTick initialTick = StockTick.builder()
                         .ticker(ticker)
@@ -159,11 +164,11 @@ public class SubscriptionService {
         return subscriptions.stream()
                 .map(sub -> {
                     String ticker = sub.getTicker();
-                    Optional<Stock> stockOpt = stockRepository.findById(ticker);
-                    String name = stockOpt.map(Stock::getName).orElse("주식 " + ticker);
-                    String price = stockOpt.map(Stock::getCurrentPrice).orElse("0");
-                    String volume = stockOpt.map(Stock::getLastVolume).orElse("0");
-                    
+                    String name = stockRepository.findById(ticker)
+                            .map(Stock::getName).orElse("주식 " + ticker);
+                    String price = stockPriceRedisRepository.getPrice(ticker);
+                    String volume = stockPriceRedisRepository.getVolume(ticker);
+
                     return SubscriptionResponse.builder()
                             .ticker(ticker)
                             .name(name)

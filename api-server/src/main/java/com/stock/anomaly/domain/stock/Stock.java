@@ -27,12 +27,6 @@ public class Stock {
     @Column(length = 20)
     private String market; // 시장 구분 (KOSPI, KOSDAQ 등)
 
-    @Column(length = 20)
-    private String currentPrice; // 현재가
-
-    @Column(length = 20)
-    private String lastVolume;   // 누적 거래량
-
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -42,10 +36,5 @@ public class Stock {
 
     public void updateName(String name) {
         this.name = name;
-    }
-
-    public void updatePrice(String currentPrice, String lastVolume) {
-        this.currentPrice = currentPrice;
-        this.lastVolume = lastVolume;
     }
 }
