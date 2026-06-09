@@ -29,8 +29,9 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json()
-        localStorage.setItem("accessToken", `${data.tokenType} ${data.accessToken}`)
-        document.cookie = "authenticated=true; path=/; SameSite=Lax"
+        const token = `${data.tokenType} ${data.accessToken}`
+        localStorage.setItem("accessToken", token)
+        document.cookie = `accessToken=${encodeURIComponent(token)}; path=/; SameSite=Lax`
         router.push("/")
       } else {
         const errorMsg = await response.text()

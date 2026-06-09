@@ -163,9 +163,16 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const token = localStorage.getItem("accessToken")
+    if (token) {
+      await fetch("http://localhost:8080/api/v1/auth/logout", {
+        method: "POST",
+        headers: { "Authorization": token }
+      }).catch(() => {})
+    }
     localStorage.removeItem("accessToken")
-    document.cookie = "authenticated=; path=/; max-age=0"
+    document.cookie = "accessToken=; path=/; max-age=0"
     router.replace("/auth/login")
   }
 

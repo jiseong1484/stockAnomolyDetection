@@ -1,6 +1,7 @@
 package com.stock.anomaly.infrastructure.security;
 
 import com.stock.anomaly.infrastructure.security.jwt.JwtAuthenticationFilter;
+import com.stock.anomaly.infrastructure.security.jwt.JwtBlacklistService;
 import com.stock.anomaly.infrastructure.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ import java.util.Arrays;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -36,7 +38,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**", "/api/v1/users/signup").permitAll()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider, jwtBlacklistService), UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
     }

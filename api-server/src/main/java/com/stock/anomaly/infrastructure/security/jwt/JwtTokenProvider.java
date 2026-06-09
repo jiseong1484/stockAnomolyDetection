@@ -58,6 +58,17 @@ public class JwtTokenProvider {
         return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody().getSubject();
     }
 
+    public long getRemainingExpirationSeconds(String token) {
+        try {
+            Date expiration = Jwts.parserBuilder().setSigningKey(key).build()
+                    .parseClaimsJws(token).getBody().getExpiration();
+            long remaining = (expiration.getTime() - System.currentTimeMillis()) / 1000;
+            return Math.max(remaining, 0);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);

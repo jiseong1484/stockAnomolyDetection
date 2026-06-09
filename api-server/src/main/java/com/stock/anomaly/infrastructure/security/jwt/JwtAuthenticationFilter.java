@@ -16,11 +16,12 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final JwtBlacklistService jwtBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        
+
         String path = request.getRequestURI();
         if (path.startsWith("/api/v1/auth/") || path.equals("/api/v1/users/signup")) {
             filterChain.doFilter(request, response);
@@ -29,7 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtTokenProvider.validateToken(token)) {
+        if (token != null && jwtTokenProvider.validateToken(token) && !jwtBlacklistService.isBlacklisted(token)) {
             Authentication authentication = jwtTokenProvider.getAuthentication(token);
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }
@@ -45,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
             return bearerToken;
         }
-        
+
         // SSE를 위한 쿼리 파라미터 토큰 확인
         String queryToken = request.getParameter("token");
         if (StringUtils.hasText(queryToken)) {
@@ -54,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
             return queryToken;
         }
-        
+
         return null;
     }
 }
