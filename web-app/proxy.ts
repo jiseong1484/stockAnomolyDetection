@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname.startsWith('/auth/login') || pathname.startsWith('/auth/signup')) {
     return NextResponse.next()
   }
 
-  const isAuthenticated = request.cookies.get('authenticated')?.value === 'true'
-  if (!isAuthenticated) {
+  const accessToken = request.cookies.get('accessToken')?.value
+  if (!accessToken) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
