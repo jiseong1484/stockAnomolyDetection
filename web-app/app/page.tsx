@@ -263,7 +263,7 @@ export default function DashboardPage() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>내 설정</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/settings/profile")}>
                   <User className="mr-2 h-4 w-4" />
                   <span>프로필 설정</span>
                 </DropdownMenuItem>
