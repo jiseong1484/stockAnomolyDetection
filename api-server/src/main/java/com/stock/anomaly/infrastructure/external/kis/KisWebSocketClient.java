@@ -85,18 +85,33 @@ public class KisWebSocketClient extends TextWebSocketHandler {
 
             String data = parts[3];
             String[] dataParts = data.split("\\^");
-            
-            if (dataParts.length > 2) {
+
+            // H0STCNT0 필드 순서:
+            // [0] MKSC_SHRN_ISCD  [1] STCK_CNTG_HOUR  [2] STCK_PRPR(현재가)
+            // [3] PRDY_VRSS_SIGN  [4] PRDY_VRSS(전일대비금액)  [5] PRDY_CTRT(전일대비율)
+            // [13] ACML_VOL(누적거래량)
+            if (dataParts.length > 13) {
                 String ticker = dataParts[0];
-                String price = dataParts[2];
-                String volume = dataParts[13]; // 누적 체결량 (ACML_VOL)
+                String price  = dataParts[2];
+                String volume = dataParts[13];
+
+                String sign      = dataParts[3]; // 1=상한 2=상승 3=보합 4=하락 5=하한
+                String prdyVrss  = dataParts[4]; // 전일 대비 금액 (절댓값)
+                String prdyCtrt  = dataParts[5]; // 전일 대비율 (절댓값)
+
+                boolean negative = "4".equals(sign) || "5".equals(sign);
+                boolean zero     = "3".equals(sign);
+                String changeAmount = zero ? "0" : (negative ? "-" : "") + prdyVrss;
+                String changeRate   = zero ? "0" : (negative ? "-" : "") + prdyCtrt;
 
                 StockTick tick = StockTick.builder()
                         .ticker(ticker)
                         .price(price)
                         .volume(volume)
                         .timestamp(System.currentTimeMillis())
-                        .ownerEmail(appKey) // appKey를 통해 사용자 식별
+                        .ownerEmail(appKey)
+                        .changeAmount(changeAmount)
+                        .changeRate(changeRate)
                         .build();
 
                 stockTickPublisher.publish(tick);

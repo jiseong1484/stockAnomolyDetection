@@ -106,18 +106,24 @@ export default function DashboardPage() {
 
     eventSource.addEventListener("stock-tick", (event) => {
       const newTick = JSON.parse(event.data)
+      const rate   = newTick.changeRate   != null ? String(newTick.changeRate)   : null
+      const amount = newTick.changeAmount != null ? String(newTick.changeAmount) : null
+
       setStocks((prevStocks) =>
-        prevStocks.map(stock =>
-          stock.ticker === newTick.ticker
-            ? { ...stock, price: String(newTick.price) }
-            : stock
-        )
+        prevStocks.map(stock => {
+          if (stock.ticker !== newTick.ticker) return stock
+          const update: Partial<typeof stock> = { price: String(newTick.price) }
+          if (rate   != null) update.change       = rate + "%"
+          if (amount != null) update.changeAmount = amount
+          return { ...stock, ...update }
+        })
       )
       setSelectedStock((prev) => {
-        if (prev && prev.ticker === newTick.ticker) {
-          return { ...prev, price: String(newTick.price) }
-        }
-        return prev
+        if (!prev || prev.ticker !== newTick.ticker) return prev
+        const update: Partial<typeof prev> = { price: String(newTick.price) }
+        if (rate   != null) update.change       = rate + "%"
+        if (amount != null) update.changeAmount = amount
+        return { ...prev, ...update }
       })
     })
 

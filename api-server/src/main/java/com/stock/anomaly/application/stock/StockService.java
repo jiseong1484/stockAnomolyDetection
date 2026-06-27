@@ -157,10 +157,10 @@ public class StockService {
                     influxDbRepository.saveOhlcvList(ticker, interval, apiData);
                     log.info("[StockService] Cached {} points to InfluxDB", apiData.size());
 
-                    // 병합 (중복 제거를 위해 Map 사용)
+                    // 병합 (중복 제거를 위해 Map 사용) — KIS API 데이터가 캐시를 덮어써야 최신값 유지
                     java.util.Map<Long, OhlcvResponse> mergedMap = new java.util.TreeMap<>();
-                    for (OhlcvResponse data : apiData) mergedMap.put(data.getTime(), data);
                     for (OhlcvResponse data : dbData) mergedMap.put(data.getTime(), data);
+                    for (OhlcvResponse data : apiData) mergedMap.put(data.getTime(), data);
 
                     List<OhlcvResponse> result = new java.util.ArrayList<>(mergedMap.values());
                     log.info("[StockService] Merged result size: {}", result.size());

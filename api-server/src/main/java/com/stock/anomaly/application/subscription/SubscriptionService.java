@@ -128,8 +128,17 @@ public class SubscriptionService {
             if (response.getBody() != null && response.getBody().containsKey("output")) {
                 Map output = (Map) response.getBody().get("output");
                 String currentPrice = (String) output.get("stck_prpr");
-                String acmlVol = (String) output.get("acml_vol");
-                
+                String acmlVol      = (String) output.get("acml_vol");
+
+                // 전일 대비 정보 추출 (WebSocket과 동일한 부호 계산)
+                String sign    = (String) output.get("prdy_vrss_sign"); // 1=상한 2=상승 3=보합 4=하락 5=하한
+                String vrss    = (String) output.get("prdy_vrss");      // 전일 대비 금액
+                String ctrt    = (String) output.get("prdy_ctrt");      // 전일 대비율
+                boolean neg    = "4".equals(sign) || "5".equals(sign);
+                boolean zero   = "3".equals(sign);
+                String changeAmount = (vrss == null || zero) ? "0" : (neg ? "-" : "") + vrss;
+                String changeRate   = (ctrt == null || zero) ? "0" : (neg ? "-" : "") + ctrt;
+
                 log.info("Fetched initial price for {}: {}", ticker, currentPrice);
 
                 // Redis에 현재가 저장 (MySQL 대신)
@@ -140,7 +149,9 @@ public class SubscriptionService {
                         .price(currentPrice)
                         .volume(acmlVol)
                         .timestamp(System.currentTimeMillis())
-                        .ownerEmail(user.getKisApiKey()) // WebSocket과 동일하게 appKey를 식별자로 사용
+                        .ownerEmail(user.getKisApiKey())
+                        .changeAmount(changeAmount)
+                        .changeRate(changeRate)
                         .build();
                 
                 stockTickPublisher.publish(initialTick);

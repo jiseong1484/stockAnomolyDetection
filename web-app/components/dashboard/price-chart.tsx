@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { createChart, IChartApi, ISeriesApi, ColorType, CandlestickSeries, HistogramSeries } from "lightweight-charts"
-import { AlertTriangle, TrendingUp, TrendingDown, Activity } from "lucide-react"
+import { TrendingUp, TrendingDown, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Stock } from "./stock-list"
 
@@ -413,16 +413,12 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     });
   }
 
+  // KIS WebSocket/REST 가 제공하는 전일 대비 데이터를 직접 사용
   const priceChange = useMemo(() => {
-    if (ohlcvData.length < 2) return { value: 0, percent: 0 }
-    const first = ohlcvData[0].open
-    const last = parseFloat(selectedStock?.price || "0")
-    if (first === 0) return { value: 0, percent: 0 }
-    return {
-      value: last - first,
-      percent: ((last - first) / first) * 100,
-    }
-  }, [ohlcvData, selectedStock?.price])
+    const percent = Number((selectedStock?.change ?? "0").replace("%", "").trim()) || 0
+    const value   = Number(selectedStock?.changeAmount ?? "0") || 0
+    return { value, percent }
+  }, [selectedStock?.change, selectedStock?.changeAmount])
 
   if (!selectedStock) {
     return (
