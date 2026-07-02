@@ -169,6 +169,22 @@ export default function DashboardPage() {
     }
   }
 
+  const handleUnsubscribe = async (ticker: string) => {
+    const token = localStorage.getItem("accessToken")
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/subscriptions/${ticker}`, {
+        method: "DELETE",
+        headers: { "Authorization": token || "" }
+      })
+      if (response.ok) {
+        setStocks((prev) => prev.filter((stock) => stock.ticker !== ticker))
+        setSelectedStock((prev) => (prev?.ticker === ticker ? null : prev))
+      }
+    } catch (error) {
+      console.error("Failed to unsubscribe:", error)
+    }
+  }
+
   const handleLogout = async () => {
     const token = localStorage.getItem("accessToken")
     if (token) {
@@ -283,10 +299,11 @@ export default function DashboardPage() {
         <div className="grid h-full grid-cols-12 gap-6">
           {/* Left Column: Stock List */}
           <div className="col-span-12 lg:col-span-3 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <StockList 
-              stocks={stocks} 
-              selectedStock={selectedStock} 
-              onSelectStock={setSelectedStock} 
+            <StockList
+              stocks={stocks}
+              selectedStock={selectedStock}
+              onSelectStock={setSelectedStock}
+              onUnsubscribe={handleUnsubscribe}
             />
           </div>
 

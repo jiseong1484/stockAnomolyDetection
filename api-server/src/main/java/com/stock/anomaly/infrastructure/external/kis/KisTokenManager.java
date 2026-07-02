@@ -60,6 +60,13 @@ public class KisTokenManager {
         return null;
     }
 
+    public boolean validateKeys(String appKey, String appSecret) {
+        if (appKey == null || appKey.isBlank() || appSecret == null || appSecret.isBlank()) {
+            return false;
+        }
+        return getAccessToken(appKey, appSecret) != null;
+    }
+
     public String getApprovalKey(String appKey, String appSecret) {
         String url = apiUrl + "/oauth2/Approval";
 

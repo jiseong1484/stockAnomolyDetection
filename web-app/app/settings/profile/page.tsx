@@ -75,7 +75,8 @@ export default function ProfileSettingsPage() {
         setKisSecretKey("")
         setProfile((prev) => prev ? { ...prev, hasKisApiKey: true } : prev)
       } else {
-        setMessage({ type: "error", text: "저장에 실패했습니다. 다시 시도해주세요." })
+        const errorText = await response.text()
+        setMessage({ type: "error", text: errorText || "저장에 실패했습니다. 다시 시도해주세요." })
       }
     } catch {
       setMessage({ type: "error", text: "서버 연결에 실패했습니다." })
