@@ -43,7 +43,7 @@ export default function SignupPage() {
         router.push("/auth/login")
       } else {
         const errorData = await response.text()
-        alert("회원가입 실패: " + errorData)
+        alert(errorData || "회원가입에 실패했습니다. 입력 정보를 확인해주세요.")
       }
     } catch (error) {
       console.error("Signup Error:", error)

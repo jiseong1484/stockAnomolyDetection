@@ -193,6 +193,10 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
       noMoreDataRef.current = false
       setIsChartReady(false)
       chart.remove()
+      // chart.remove() 이후 disposed된 시리즈에 setData()가 호출되지 않도록 ref를 비운다
+      chartApi.current = null
+      candleSeries.current = null
+      volumeSeries.current = null
     }
   }, [selectedStock?.ticker, interval])
 
@@ -420,114 +424,120 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     return { value, percent }
   }, [selectedStock?.change, selectedStock?.changeAmount])
 
-  if (!selectedStock) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-        <Activity className="mb-3 h-12 w-12 opacity-30" />
-        <p className="text-sm">종목을 선택하세요</p>
-      </div>
-    )
-  }
-
+  // 차트가 붙어있는 DOM 노드(chartContainerRef)는 selectedStock 유무와 무관하게
+  // 항상 마운트 상태를 유지해야 한다. 종목 선택이 해제될 때 이 노드가 통째로
+  // 언마운트되면, lightweight-charts 내부 ResizeObserver 콜백이 비동기로 실행되며
+  // 이미 사라진 DOM/캔버스 바인딩에 접근해 "Object is disposed" 에러가 발생한다.
   return (
     <div className="flex h-full flex-col relative">
-      <div className="flex items-start justify-between border-b border-border px-6 py-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-foreground">{selectedStock.name}</h1>
-            <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
-              {selectedStock.ticker}
-            </span>
-            <span className="flex items-center gap-1 text-xs text-chart-1">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-chart-1" />
-              LIVE
-            </span>
-          </div>
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className="text-3xl font-bold tabular-nums text-foreground">
-              {parseFloat(selectedStock.price).toLocaleString("ko-KR")}
-            </span>
-            <span className="text-lg text-muted-foreground">KRW</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1">
-            <button
-              onClick={() => setChartInterval("1m")}
-              className={cn(
-                "rounded px-3 py-1 text-xs font-medium transition-colors",
-                interval === "1m" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              1분
-            </button>
-            <button
-              onClick={() => setChartInterval("1d")}
-              className={cn(
-                "rounded px-3 py-1 text-xs font-medium transition-colors",
-                interval === "1d" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              1일
-            </button>
-            <button
-              onClick={() => setChartInterval("1w")}
-              className={cn(
-                "rounded px-3 py-1 text-xs font-medium transition-colors",
-                interval === "1w" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              1주
-            </button>
-            <button
-              onClick={() => setChartInterval("1M")}
-              className={cn(
-                "rounded px-3 py-1 text-xs font-medium transition-colors",
-                interval === "1M" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              1월
-            </button>
-          </div>
-          <div className={cn("rounded-lg px-4 py-2 text-right", priceChange.value >= 0 ? "bg-chart-1/10" : "bg-chart-2/10")}>
-            <div className={cn("flex items-center justify-end gap-1 text-lg font-semibold tabular-nums", priceChange.value >= 0 ? "text-chart-1" : "text-chart-2")}>
-              {priceChange.value >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
-              {priceChange.value >= 0 ? "+" : ""}{priceChange.percent.toFixed(2)}%
+      {selectedStock ? (
+        <>
+          <div className="flex items-start justify-between border-b border-border px-6 py-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-xl font-bold text-foreground">{selectedStock.name}</h1>
+                <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
+                  {selectedStock.ticker}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-chart-1">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-chart-1" />
+                  LIVE
+                </span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-3">
+                <span className="text-3xl font-bold tabular-nums text-foreground">
+                  {parseFloat(selectedStock.price).toLocaleString("ko-KR")}
+                </span>
+                <span className="text-lg text-muted-foreground">KRW</span>
+              </div>
             </div>
-            <div className={cn("text-sm tabular-nums", priceChange.value >= 0 ? "text-chart-1/70" : "text-chart-2/70")}>
-              {priceChange.value >= 0 ? "+" : ""}{priceChange.value.toLocaleString("ko-KR")}
+            <div className="flex flex-col items-end gap-3">
+              <div className="flex items-center gap-1 rounded-lg bg-secondary/50 p-1">
+                <button
+                  onClick={() => setChartInterval("1m")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    interval === "1m" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  1분
+                </button>
+                <button
+                  onClick={() => setChartInterval("1d")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    interval === "1d" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  1일
+                </button>
+                <button
+                  onClick={() => setChartInterval("1w")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    interval === "1w" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  1주
+                </button>
+                <button
+                  onClick={() => setChartInterval("1M")}
+                  className={cn(
+                    "rounded px-3 py-1 text-xs font-medium transition-colors",
+                    interval === "1M" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  1월
+                </button>
+              </div>
+              <div className={cn("rounded-lg px-4 py-2 text-right", priceChange.value >= 0 ? "bg-chart-1/10" : "bg-chart-2/10")}>
+                <div className={cn("flex items-center justify-end gap-1 text-lg font-semibold tabular-nums", priceChange.value >= 0 ? "text-chart-1" : "text-chart-2")}>
+                  {priceChange.value >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                  {priceChange.value >= 0 ? "+" : ""}{priceChange.percent.toFixed(2)}%
+                </div>
+                <div className={cn("text-sm tabular-nums", priceChange.value >= 0 ? "text-chart-1/70" : "text-chart-2/70")}>
+                  {priceChange.value >= 0 ? "+" : ""}{priceChange.value.toLocaleString("ko-KR")}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* OHLC Legend Overlay */}
-      <div className="absolute left-6 top-32 z-10 flex gap-4 text-[11px] font-medium tabular-nums">
-        {legendData ? (
-          <>
-            <div className="flex gap-1"><span className="text-muted-foreground">O:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.open.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">H:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.high.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">L:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.low.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">C:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.close.toLocaleString()}</span></div>
-          </>
-        ) : ohlcvData.length > 0 && (
-          <>
-            <div className="flex gap-1"><span className="text-muted-foreground">O:</span><span>{ohlcvData[ohlcvData.length-1].open.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">H:</span><span>{ohlcvData[ohlcvData.length-1].high.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">L:</span><span>{ohlcvData[ohlcvData.length-1].low.toLocaleString()}</span></div>
-            <div className="flex gap-1"><span className="text-muted-foreground">C:</span><span>{ohlcvData[ohlcvData.length-1].close.toLocaleString()}</span></div>
-          </>
-        )}
-      </div>
+          {/* OHLC Legend Overlay */}
+          <div className="absolute left-6 top-32 z-10 flex gap-4 text-[11px] font-medium tabular-nums">
+            {legendData ? (
+              <>
+                <div className="flex gap-1"><span className="text-muted-foreground">O:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.open.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">H:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.high.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">L:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.low.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">C:</span><span className={legendData.close >= legendData.open ? "text-chart-1" : "text-chart-2"}>{legendData.close.toLocaleString()}</span></div>
+              </>
+            ) : ohlcvData.length > 0 && (
+              <>
+                <div className="flex gap-1"><span className="text-muted-foreground">O:</span><span>{ohlcvData[ohlcvData.length-1].open.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">H:</span><span>{ohlcvData[ohlcvData.length-1].high.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">L:</span><span>{ohlcvData[ohlcvData.length-1].low.toLocaleString()}</span></div>
+                <div className="flex gap-1"><span className="text-muted-foreground">C:</span><span>{ohlcvData[ohlcvData.length-1].close.toLocaleString()}</span></div>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card text-muted-foreground">
+          <Activity className="mb-3 h-12 w-12 opacity-30" />
+          <p className="text-sm">종목을 선택하세요</p>
+        </div>
+      )}
 
       <div className="flex-1 p-4" ref={chartContainerRef} style={{ position: "relative" }} />
 
-      <div className="flex items-center gap-2 border-t border-border px-6 py-3">
-        <Activity className={cn("h-4 w-4", (isLoadingMore || !isHistoryLoaded) ? "animate-pulse text-muted-foreground" : "text-chart-1")} />
-        <span className="text-xs text-muted-foreground">
-          {isLoadingMore ? "과거 데이터 불러오는 중..." : (!isHistoryLoaded ? "데이터 로드 중..." : (ohlcvData.length === 0 ? "과거 데이터 부재 (실시간 대기 중)" : "실시간 스트리밍 중"))}
-        </span>
-      </div>
+      {selectedStock && (
+        <div className="flex items-center gap-2 border-t border-border px-6 py-3">
+          <Activity className={cn("h-4 w-4", (isLoadingMore || !isHistoryLoaded) ? "animate-pulse text-muted-foreground" : "text-chart-1")} />
+          <span className="text-xs text-muted-foreground">
+            {isLoadingMore ? "과거 데이터 불러오는 중..." : (!isHistoryLoaded ? "데이터 로드 중..." : (ohlcvData.length === 0 ? "과거 데이터 부재 (실시간 대기 중)" : "실시간 스트리밍 중"))}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
