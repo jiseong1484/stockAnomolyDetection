@@ -36,5 +36,8 @@ public class User {
     @Column(name = "kis_secret_key", length = 1000)
     private String kisSecretKey;
 
-    // TODO: 추가적인 사용자 정보 (가입 일자 등)
+    public void updateKisKeys(String kisApiKey, String kisSecretKey) {
+        this.kisApiKey = kisApiKey;
+        this.kisSecretKey = kisSecretKey;
+    }
 }

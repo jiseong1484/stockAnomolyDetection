@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react"
+import { TrendingUp, TrendingDown, AlertTriangle, X } from "lucide-react"
 
 interface Stock {
   id: string
@@ -17,9 +17,10 @@ interface StockListProps {
   stocks: Stock[]
   selectedStock: Stock | null
   onSelectStock: (stock: Stock) => void
+  onUnsubscribe: (ticker: string) => void
 }
 
-export function StockList({ stocks, selectedStock, onSelectStock }: StockListProps) {
+export function StockList({ stocks, selectedStock, onSelectStock, onUnsubscribe }: StockListProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border px-4 py-3">
@@ -80,6 +81,17 @@ export function StockList({ stocks, selectedStock, onSelectStock }: StockListPro
                   {stock.change}
                 </div>
               </div>
+              <span
+                role="button"
+                aria-label={`${stock.name} 구독 해제`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onUnsubscribe(stock.ticker)
+                }}
+                className="ml-2 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </span>
             </button>
           ))
         )}
