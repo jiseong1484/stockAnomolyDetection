@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <cstdlib>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -112,7 +113,8 @@ int main() {
     std::signal(SIGINT,  on_signal);
     std::signal(SIGTERM, on_signal);
 
-    const std::string brokers      = "localhost:9092";
+    const char* brokers_env = std::getenv("KAFKA_BROKERS");
+    const std::string brokers      = brokers_env ? brokers_env : "localhost:9092";
     const std::string api_url      = "https://openapi.koreainvestment.com:9443";
     const std::string access_token = ""; // TODO: load from env
 
