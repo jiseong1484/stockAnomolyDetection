@@ -15,6 +15,8 @@ import {
 import { StockList, type Stock } from "@/components/dashboard/stock-list"
 import { PriceChart } from "@/components/dashboard/price-chart"
 import { AlarmLog, type AlarmEntry } from "@/components/dashboard/alarm-log"
+import { AiSignalLog, type AiSignalEntry } from "@/components/dashboard/ai-signal-log"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { API_BASE_URL } from "@/lib/api"
 
@@ -24,6 +26,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [stocks, setStocks] = useState<Stock[]>([])
   const [alarms, setAlarms] = useState<AlarmEntry[]>([])
+  const [aiSignals, setAiSignals] = useState<AiSignalEntry[]>([])
   const [newTicker, setNewTicker] = useState("")
   const [searchResults, setSearchResults] = useState<Stock[]>([])
   const [showSearchResults, setShowSearchResults] = useState(false)
@@ -139,6 +142,20 @@ export default function DashboardPage() {
         severity: raw.severity,
       }
       setAlarms((prev) => [newAlarm, ...prev.slice(0, 49)])
+    })
+
+    eventSource.addEventListener("ai-signal", (event) => {
+      const raw = JSON.parse(event.data)
+      const newSignal: AiSignalEntry = {
+        id: `${raw.ticker}-${raw.timestamp_ms}`,
+        timestamp: new Date(raw.timestamp_ms),
+        ticker: raw.ticker,
+        close: raw.close,
+        bullProbability: raw.bull_probability,
+        bearProbability: raw.bear_probability,
+        direction: raw.direction,
+      }
+      setAiSignals((prev) => [newSignal, ...prev.slice(0, 49)])
     })
 
     return () => {
@@ -314,7 +331,18 @@ export default function DashboardPage() {
 
           {/* Right Column: Logs */}
           <div className="col-span-12 lg:col-span-3 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            <AlarmLog alarms={alarms} />
+            <Tabs defaultValue="alarms" className="h-full gap-0">
+              <TabsList className="mx-4 mt-2 w-fit">
+                <TabsTrigger value="alarms">실시간 알람 로그</TabsTrigger>
+                <TabsTrigger value="ai-signals">AI 시그널</TabsTrigger>
+              </TabsList>
+              <TabsContent value="alarms" className="h-[calc(100%-2.75rem)]">
+                <AlarmLog alarms={alarms} />
+              </TabsContent>
+              <TabsContent value="ai-signals" className="h-[calc(100%-2.75rem)]">
+                <AiSignalLog signals={aiSignals} />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </main>

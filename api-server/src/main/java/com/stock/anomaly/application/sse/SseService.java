@@ -66,4 +66,15 @@ public class SseService {
             }
         });
     }
+
+    public void broadcastAiSignal(Object data) {
+        emitters.forEach((email, emitter) -> {
+            try {
+                emitter.send(SseEmitter.event().name("ai-signal").data(data));
+            } catch (IOException e) {
+                log.error("Failed to broadcast AI signal to {}: {}", email, e.getMessage());
+                emitters.remove(email);
+            }
+        });
+    }
 }
