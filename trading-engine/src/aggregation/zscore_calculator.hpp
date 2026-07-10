@@ -16,7 +16,7 @@ class ZScoreCalculator {
 public:
     // Feed a new volume observation; returns the Z-score of that value.
     double push(double volume) noexcept {
-        const std::size_t idx = count_ & kMask;
+        const std::size_t idx = count_ % Window;
 
         if (count_ >= Window) {
             // Remove oldest sample from running stats using Welford reverse step.
@@ -24,6 +24,7 @@ public:
             const double new_mean = mean_ + (volume - old_val) / static_cast<double>(Window);
             m2_ += (volume - old_val) * ((volume - new_mean) + (old_val - mean_));
             mean_ = new_mean;
+            ++count_;
         } else {
             // Welford forward step (warm-up phase).
             ++count_;
@@ -34,7 +35,6 @@ public:
         }
 
         buffer_[idx] = volume;
-        if (count_ >= Window) ++count_; // keep advancing after warmup
 
         const double variance = (count_ > 1)
             ? m2_ / static_cast<double>(std::min(count_, Window) - 1)
@@ -53,7 +53,6 @@ public:
     void reset() noexcept { mean_ = 0; m2_ = 0; count_ = 0; buffer_.fill(0); }
 
 private:
-    static constexpr std::size_t kMask = Window - 1; // works only if Window is power-of-two; else use % Window
     std::array<double, Window> buffer_{};
     double      mean_{0};
     double      m2_{0};

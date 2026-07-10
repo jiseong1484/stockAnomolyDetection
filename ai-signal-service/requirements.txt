@@ -1,0 +1,6 @@
+confluent-kafka==2.5.0
+pandas==2.2.2
+numpy==1.26.4
+influxdb-client==1.44.0
+pyarrow==17.0.0
+PyYAML==6.0.2

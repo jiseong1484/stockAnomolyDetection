@@ -1,0 +1,44 @@
+# ai-signal-service 설정
+# 실거래 파라미터가 아니라 "규칙 기반 스코어러"의 가중치/임계값.
+# 트레이딩엔진 코드 변경 없이 이 파일만 바꿔서 튜닝한다.
+
+kafka:
+  candle_topic: "candle-data"
+  signal_topic: "ai-signals"
+  consumer_group: "ai-signal-service"   # candle-persist-group(api-server)과 별개 — 둘 다 전체 메시지를 받는다
+
+influxdb:
+  org: "stock-org"
+  bucket: "stock-bucket"
+
+buffer:
+  max_len: 60            # 종목당 인메모리에 들고 있을 최근 캔들 개수
+  min_len_for_signal: 30  # 이 개수 이상 쌓이기 전엔 신호를 내지 않음 (MACD/BB 워밍업)
+
+indicators:
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  macd_norm_divisor: 500.0   # macd_hist(원 단위)를 대략 [-1,1]로 정규화 — 종목 가격대 보고 튜닝 필요
+  rsi_period: 14
+  bb_period: 20
+  bb_stddev: 2.0
+  vwap_norm_divisor: 3.0     # VWAP 이격도(%)를 [-1,1]로 정규화하는 나눔값
+  volume_zscore_period: 20
+  volume_zscore_cap: 5.0     # 거래량 z-score가 이 값 이상이면 boost를 더 늘리지 않음
+
+scoring:
+  # 가격 방향성 지표 가중치 (합 1.0)
+  weight_macd: 0.30
+  weight_rsi: 0.25
+  weight_bb: 0.25
+  weight_vwap: 0.20
+  # 거래량 이상치는 방향을 정하지 않고 "확신도"를 증폭시키는 용도
+  volume_boost_weight: 0.5   # 최대 1.5배 증폭
+  sensitivity: 4.0           # sigmoid(score * sensitivity) — 클수록 확률이 0/1에 가깝게 극단화됨
+  buy_threshold: 0.65        # SwingHandler.kMinBullProb와 동일하게 맞춤
+  sell_threshold: 0.35       # 대칭 임계값 (1 - buy_threshold)
+
+logging:
+  feature_log_dir: "/data/swing_samples"  # 트레이드 발생 여부와 무관하게 매 캔들 피처+점수 기록 (메타-라벨링용)
+  flush_every_n_rows: 50

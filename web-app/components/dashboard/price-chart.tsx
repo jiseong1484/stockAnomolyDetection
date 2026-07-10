@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { createChart, IChartApi, ISeriesApi, ColorType, CandlestickSeries, HistogramSeries } from "lightweight-charts"
 import { TrendingUp, TrendingDown, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { API_BASE_URL } from "@/lib/api"
 import type { Stock } from "./stock-list"
 
 interface OhlcvPoint {
@@ -209,7 +210,13 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
     }
     
     // 현재 가장 오래된 데이터의 시간 기준 하루 전날 계산
-    const earliestPoint = currentData[0];
+    // 배열의 실제 정렬 순서를 신뢰하지 않고 time 최솟값을 직접 찾는다
+    // (백엔드 응답 순서가 항상 오름차순이라는 보장이 없어 currentData[0]이
+    //  최신 데이터일 수 있음 — 이 경우 loadMore가 엉뚱한 날짜를 요청하게 됨)
+    const earliestPoint = currentData.reduce(
+      (min, d) => (d.time < min.time ? d : min),
+      currentData[0]
+    );
     const ms = earliestPoint.time < 10000000000 ? earliestPoint.time * 1000 : earliestPoint.time;
     const date = new Date(ms + (9 * 60 * 60 * 1000)); // KST 변환
     
@@ -239,7 +246,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
 
     try {
       const token = localStorage.getItem("accessToken");
-      const url = `http://localhost:8080/api/v1/stocks/${selectedStock?.ticker}/ohlcv?interval=${interval}&days=200&endDate=${endDateStr}`;
+      const url = `${API_BASE_URL}/api/v1/stocks/${selectedStock?.ticker}/ohlcv?interval=${interval}&days=200&endDate=${endDateStr}`;
       
       const response = await fetch(url, {
         headers: { "Authorization": token || "" }
@@ -295,7 +302,7 @@ export function PriceChart({ selectedStock }: PriceChartProps) {
       try {
         setIsHistoryLoaded(false)
         const token = localStorage.getItem("accessToken")
-        const url = `http://localhost:8080/api/v1/stocks/${selectedStock.ticker}/ohlcv?interval=${interval}&days=500`;
+        const url = `${API_BASE_URL}/api/v1/stocks/${selectedStock.ticker}/ohlcv?interval=${interval}&days=500`;
         
         console.log(`[PriceChart] Initial fetch started. URL: ${url}`);
         

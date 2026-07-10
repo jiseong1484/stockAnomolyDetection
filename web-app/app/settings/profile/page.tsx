@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { API_BASE_URL } from "@/lib/api"
 
 interface UserProfile {
   email: string
@@ -35,7 +36,7 @@ export default function ProfileSettingsPage() {
 
   const fetchProfile = async (token: string) => {
     try {
-      const response = await fetch("http://localhost:8080/api/v1/users/me", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
         headers: { Authorization: token },
       })
       if (response.ok) {
@@ -60,7 +61,7 @@ export default function ProfileSettingsPage() {
 
     try {
       const token = localStorage.getItem("accessToken")
-      const response = await fetch("http://localhost:8080/api/v1/users/me/kis-keys", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/me/kis-keys`, {
         method: "PUT",
         headers: {
           Authorization: token || "",

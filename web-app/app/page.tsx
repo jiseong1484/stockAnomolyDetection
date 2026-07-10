@@ -15,8 +15,8 @@ import {
 import { StockList, type Stock } from "@/components/dashboard/stock-list"
 import { PriceChart } from "@/components/dashboard/price-chart"
 import { AlarmLog, type AlarmEntry } from "@/components/dashboard/alarm-log"
-import { SystemMetrics } from "@/components/dashboard/system-metrics"
 import { cn } from "@/lib/utils"
+import { API_BASE_URL } from "@/lib/api"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -32,7 +32,7 @@ export default function DashboardPage() {
     const token = localStorage.getItem("accessToken")
     console.log("[Dashboard] Fetching subscriptions with token:", token ? "Exists" : "Missing")
     try {
-      const response = await fetch("http://localhost:8080/api/v1/subscriptions", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/subscriptions`, {
         headers: { "Authorization": token || "" }
       })
       if (response.ok) {
@@ -64,7 +64,7 @@ export default function DashboardPage() {
 
       try {
         const token = localStorage.getItem("accessToken")
-        const response = await fetch(`http://localhost:8080/api/v1/stocks/search?query=${newTicker}`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/stocks/search?query=${newTicker}`, {
           headers: { "Authorization": token || "" }
         })
         if (response.ok) {
@@ -102,7 +102,7 @@ export default function DashboardPage() {
     const rawToken = token.startsWith("Bearer ") ? token.split(' ')[1] : token
     console.log("[Dashboard] Connecting SSE with token length:", rawToken.length)
     
-    const eventSource = new EventSource(`http://localhost:8080/api/v1/sse/subscribe?token=${rawToken}`)
+    const eventSource = new EventSource(`${API_BASE_URL}/api/v1/sse/subscribe?token=${rawToken}`)
 
     eventSource.addEventListener("stock-tick", (event) => {
       const newTick = JSON.parse(event.data)
@@ -151,7 +151,7 @@ export default function DashboardPage() {
     if (!targetTicker) return
     const token = localStorage.getItem("accessToken")
     try {
-      const response = await fetch("http://localhost:8080/api/v1/subscriptions", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/subscriptions`, {
         method: "POST",
         headers: { 
           "Authorization": token || "",
@@ -172,7 +172,7 @@ export default function DashboardPage() {
   const handleUnsubscribe = async (ticker: string) => {
     const token = localStorage.getItem("accessToken")
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/subscriptions/${ticker}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/subscriptions/${ticker}`, {
         method: "DELETE",
         headers: { "Authorization": token || "" }
       })
@@ -188,7 +188,7 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     const token = localStorage.getItem("accessToken")
     if (token) {
-      await fetch("http://localhost:8080/api/v1/auth/logout", {
+      await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
         method: "POST",
         headers: { "Authorization": token }
       }).catch(() => {})
@@ -307,14 +307,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Center Column: Chart & Metrics */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col gap-6 overflow-hidden">
-            <div className="flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-              <PriceChart selectedStock={selectedStock} />
-            </div>
-            <div className="h-48 overflow-hidden rounded-xl border border-border bg-card shadow-sm p-4">
-              <SystemMetrics />
-            </div>
+          {/* Center Column: Chart */}
+          <div className="col-span-12 lg:col-span-6 self-start h-[calc(100%-10rem)] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <PriceChart selectedStock={selectedStock} />
           </div>
 
           {/* Right Column: Logs */}

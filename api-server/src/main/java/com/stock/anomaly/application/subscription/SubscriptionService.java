@@ -199,5 +199,6 @@ public class SubscriptionService {
     public void unsubscribe(User user, String ticker) {
         subscriptionRepository.deleteByUserAndTicker(user, ticker);
         subscriptionCacheRedisRepository.evict(user.getId());
+        kisWebSocketClient.unsubscribe(user.getKisApiKey(), user.getKisSecretKey(), Collections.singletonList(ticker));
     }
 }

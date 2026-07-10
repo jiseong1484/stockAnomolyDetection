@@ -9,6 +9,7 @@ WORKDIR /src
 COPY CMakeLists.txt ./
 COPY src ./src
 COPY proto ./proto
+COPY tests ./tests
 
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" --target trading_engine

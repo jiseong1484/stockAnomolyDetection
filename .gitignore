@@ -50,3 +50,6 @@ infra/influxdb_data/
 # --- Logs ---
 logs/
 *.log
+
+# --- Local scratch (may contain test secrets, never commit) ---
+/scratch/

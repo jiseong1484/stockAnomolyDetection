@@ -167,8 +167,9 @@ public class StockService {
 
                     if (endDate != null && end != null) {
                         long finalEndSec = end.getEpochSecond();
-                        return result.stream().filter(d -> d.getTime() <= finalEndSec).collect(java.util.stream.Collectors.toList());
+                        result = result.stream().filter(d -> d.getTime() <= finalEndSec).collect(java.util.stream.Collectors.toList());
                     }
+                    result.sort(java.util.Comparator.comparingLong(OhlcvResponse::getTime));
                     return result;
                 }
             } else {
@@ -176,5 +177,8 @@ public class StockService {
             }
         }
 
+        // InfluxDB(Flux) 쿼리 결과가 항상 시간 오름차순이라는 보장이 없으므로
+        // (union된 여러 테이블을 순회하는 순서가 뒤섞일 수 있음) 여기서 명시적으로 정렬한다.
+        dbData.sort(java.util.Comparator.comparingLong(OhlcvResponse::getTime));
         return dbData;
     }}

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { API_BASE_URL } from "@/lib/api"
 
 import { useRouter } from "next/navigation"
 
@@ -32,7 +33,7 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
-      const response = await fetch("http://localhost:8080/api/v1/users/signup", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

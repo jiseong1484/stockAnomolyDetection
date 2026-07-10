@@ -57,3 +57,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_options(trading_engine PRIVATE -fsanitize=address,undefined)
     target_link_options(trading_engine PRIVATE    -fsanitize=address,undefined)
 endif()
+
+# ── Tests ──────────────────────────────────────────────────────────────────────
+option(TRADING_ENGINE_BUILD_TESTS "Build trading-engine unit tests" ON)
+if(TRADING_ENGINE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -34,6 +34,12 @@ public class KisWebSocketClient extends TextWebSocketHandler {
         performSubscribe(appKey, appSecret, tickers);
     }
 
+    public synchronized void unsubscribe(String appKey, String appSecret, List<String> tickers) {
+        if (tickers == null || tickers.isEmpty()) return;
+
+        performUnsubscribe(appKey, appSecret, tickers);
+    }
+
     private void performSubscribe(String appKey, String appSecret, List<String> tickers) {
         String approvalKey = kisTokenManager.getApprovalKey(appKey, appSecret);
         if (approvalKey == null) return;
@@ -57,6 +63,29 @@ public class KisWebSocketClient extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             log.error("Failed to subscribe for appKey {}: {}", appKey, e.getMessage());
+        }
+    }
+
+    private void performUnsubscribe(String appKey, String appSecret, List<String> tickers) {
+        WebSocketSession session = sessions.get(appKey);
+        if (session == null || !session.isOpen()) {
+            log.warn("No active KIS WS session for appKey {} — nothing to unsubscribe", appKey);
+            return;
+        }
+
+        String approvalKey = kisTokenManager.getApprovalKey(appKey, appSecret);
+        if (approvalKey == null) return;
+
+        try {
+            for (String ticker : tickers) {
+                String unsubMsg = String.format(
+                    "{\"header\":{\"approval_key\":\"%s\",\"custtype\":\"P\",\"tr_type\":\"2\",\"content-type\":\"utf-8\"},\"body\":{\"input\":{\"tr_id\":\"H0STCNT0\",\"tr_key\":\"%s\"}}}",
+                    approvalKey, ticker
+                );
+                session.sendMessage(new TextMessage(unsubMsg));
+            }
+        } catch (Exception e) {
+            log.error("Failed to unsubscribe for appKey {}: {}", appKey, e.getMessage());
         }
     }
 

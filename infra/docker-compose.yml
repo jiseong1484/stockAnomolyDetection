@@ -122,8 +122,26 @@ services:
     environment:
       KAFKA_BROKERS: kafka:29092
 
+  ai-signal-service:
+    build:
+      context: ../ai-signal-service
+    container_name: stock-ai-signal-service
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - ai_signal_data:/data/swing_samples
+
 volumes:
   mysql_data:
   redis_data:
   kafka_data:
   influxdb_data:
+  ai_signal_data:
